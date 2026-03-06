@@ -50,6 +50,8 @@ const SymptomInputPage = () => {
   const [loading, setLoading] = useState(false)
   const [analysis, setAnalysis] = useState(null)
   const [error, setError] = useState(null)
+  const [savedNotice, setSavedNotice] = useState(false)
+  const [pendingForAnalysis, setPendingForAnalysis] = useState(null)
 
   const bodyParts = [
     'Tête', 'Gorge', 'Poitrine', 'Abdomen', 'Dos',
@@ -104,7 +106,12 @@ const SymptomInputPage = () => {
     setError(null)
 
     try {
-      const result = await addSymptom(formData)
+      const payload = {
+        ...formData,
+        timestamp: new Date(formData.timestamp).toISOString(),
+      }
+
+      const result = await addSymptom(payload)
       
       if (!result.success) {
         setError('Erreur lors de la sauvegarde du symptôme')
@@ -112,14 +119,8 @@ const SymptomInputPage = () => {
         return
       }
 
-      const analysisResult = await apiService.analyzeSymptoms([{
-        ...formData,
-        timestamp: new Date(formData.timestamp).toISOString()
-      }])
-
-      if (analysisResult.success) {
-        setAnalysis(analysisResult.data)
-      }
+      setPendingForAnalysis(payload)
+      setSavedNotice(true)
 
       setFormData({
         description: '',
@@ -133,6 +134,30 @@ const SymptomInputPage = () => {
     } catch (err) {
       console.error('Erreur:', err)
       setError('Une erreur est survenue')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleManualAnalyze = async () => {
+    if (!pendingForAnalysis) {
+      setError('Aucun symptôme en attente d\'analyse. Enregistrez d\'abord un symptôme.')
+      return
+    }
+
+    setLoading(true)
+    setError(null)
+    try {
+      const analysisResult = await apiService.analyzeSymptoms([pendingForAnalysis])
+      if (analysisResult.success) {
+        setAnalysis(analysisResult.data)
+        setSavedNotice(false)
+        return
+      }
+      setError(analysisResult.error || 'Erreur lors de l\'analyse')
+    } catch (err) {
+      console.error('Erreur:', err)
+      setError('Une erreur est survenue pendant l\'analyse')
     } finally {
       setLoading(false)
     }
@@ -202,6 +227,21 @@ const SymptomInputPage = () => {
         {error && (
           <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>
             {error}
+          </Alert>
+        )}
+
+        {savedNotice && (
+          <Alert
+            severity="success"
+            sx={{ mb: 2 }}
+            onClose={() => setSavedNotice(false)}
+            action={
+              <Button color="inherit" size="small" onClick={handleManualAnalyze}>
+                Analyser
+              </Button>
+            }
+          >
+            Symptôme enregistré. L'analyse n'est pas automatique, cliquez sur "Analyser" si vous la souhaitez.
           </Alert>
         )}
 
@@ -368,7 +408,17 @@ const SymptomInputPage = () => {
                 },
               }}
             >
-              {loading ? 'Analyse en cours...' : 'Enregistrer et analyser'}
+              {loading ? 'Traitement...' : 'Enregistrer seulement'}
+            </Button>
+
+            <Button
+              fullWidth
+              variant="outlined"
+              onClick={handleManualAnalyze}
+              disabled={loading || !pendingForAnalysis}
+              sx={{ mt: 1.5 }}
+            >
+              Analyser le dernier symptôme enregistré
             </Button>
           </Paper>
         </motion.div>

@@ -18,6 +18,7 @@ import {
   Add,
   ArrowForward,
   Phone,
+  Description,
 } from '@mui/icons-material'
 import { motion } from 'framer-motion'
 import { useSymptom } from '../context/SymptomContext'
@@ -239,6 +240,49 @@ const HomePage = () => {
             </Card>
           </motion.div>
         </Box>
+
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.5, duration: 0.4 }}
+        >
+          <Card
+            onClick={() => navigate('/medical-profile')}
+            sx={{
+              mb: 3,
+              cursor: 'pointer',
+              border: '1px solid #bae6fd',
+              background: 'linear-gradient(135deg, #f0f9ff, #e0f2fe)',
+              transition: 'transform 0.2s',
+              '&:hover': { transform: 'translateY(-2px)' },
+            }}
+          >
+            <CardContent sx={{ display: 'flex', alignItems: 'center' }}>
+              <Box sx={{
+                width: 44,
+                height: 44,
+                borderRadius: 2,
+                bgcolor: '#0284c7',
+                color: 'white',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                mr: 1.5,
+              }}>
+                <Description />
+              </Box>
+              <Box sx={{ flexGrow: 1 }}>
+                <Typography variant="subtitle1" sx={{ fontWeight: 700, color: '#0f172a' }}>
+                  Ma fiche médicale
+                </Typography>
+                <Typography variant="caption" sx={{ color: '#475569' }}>
+                  Allergies, traitements, contact d'urgence, antécédents...
+                </Typography>
+              </Box>
+              <ArrowForward sx={{ color: '#0284c7' }} />
+            </CardContent>
+          </Card>
+        </motion.div>
 
         {/* Avertissement compact */}
         <motion.div

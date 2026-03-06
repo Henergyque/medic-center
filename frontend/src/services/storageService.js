@@ -14,12 +14,57 @@ const KEYS = {
   CHAT_HISTORY: 'chat_history',
   NOTIFICATIONS: 'notification_settings',
   LAST_CHECK: 'last_symptom_check',
+  MEDICAL_PROFILE: 'medical_profile',
 }
 
 /**
  * Service de gestion du stockage local
  */
 class StorageService {
+
+  // === Fiche médicale ===
+
+  async getMedicalProfile() {
+    try {
+      const profile = await localforage.getItem(KEYS.MEDICAL_PROFILE)
+      return profile || {
+        first_name: '',
+        last_name: '',
+        birth_date: '',
+        sex: '',
+        height_cm: '',
+        weight_kg: '',
+        blood_type: '',
+        allergies: '',
+        chronic_conditions: '',
+        current_medications: '',
+        past_surgeries: '',
+        emergency_contact_name: '',
+        emergency_contact_phone: '',
+        doctor_name: '',
+        doctor_phone: '',
+        notes: '',
+        updated_at: null,
+      }
+    } catch (error) {
+      console.error('Erreur lors de la récupération de la fiche médicale:', error)
+      return null
+    }
+  }
+
+  async saveMedicalProfile(profile) {
+    try {
+      const payload = {
+        ...profile,
+        updated_at: new Date().toISOString(),
+      }
+      await localforage.setItem(KEYS.MEDICAL_PROFILE, payload)
+      return true
+    } catch (error) {
+      console.error('Erreur lors de la sauvegarde de la fiche médicale:', error)
+      return false
+    }
+  }
   
   // === Gestion des symptômes ===
   
