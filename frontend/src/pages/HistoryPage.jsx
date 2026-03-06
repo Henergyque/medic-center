@@ -14,6 +14,11 @@ import {
   Chip,
   Alert,
   CircularProgress,
+  TextField,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
 } from '@mui/material'
 import {
   Delete,
@@ -24,6 +29,7 @@ import {
   TrendingDown,
   TrendingFlat,
   Add,
+  Edit,
 } from '@mui/icons-material'
 import { motion } from 'framer-motion'
 import { format } from 'date-fns'
@@ -33,13 +39,85 @@ import apiService from '../services/apiService'
 
 const HistoryPage = () => {
   const navigate = useNavigate()
-  const { symptoms, deleteSymptom, clearAllSymptoms, statistics } = useSymptom()
+  const { symptoms, deleteSymptom, clearAllSymptoms, statistics, updateSymptom } = useSymptom()
   const [deleteDialog, setDeleteDialog] = useState(false)
   const [clearDialog, setClearDialog] = useState(false)
+  const [editDialog, setEditDialog] = useState(false)
   const [selectedSymptom, setSelectedSymptom] = useState(null)
+  const [editData, setEditData] = useState({
+    description: '',
+    intensity: 5,
+    body_part: '',
+    duration: '',
+    notes: '',
+    timestamp: '',
+  })
   const [generating, setGenerating] = useState(false)
   const [evolution, setEvolution] = useState(null)
   const [analyzingEvolution, setAnalyzingEvolution] = useState(false)
+
+  const bodyParts = [
+    'Tête', 'Gorge', 'Poitrine', 'Abdomen', 'Dos',
+    'Bras gauche', 'Bras droit', 'Jambe gauche', 'Jambe droite',
+    'Cou', 'Épaules', 'Mains', 'Pieds', 'Peau', 'Autre'
+  ]
+
+  const durations = [
+    'Moins d\'1 heure',
+    '1-6 heures',
+    '6-24 heures',
+    '1-3 jours',
+    '3-7 jours',
+    'Plus d\'1 semaine',
+    'Récurrent'
+  ]
+
+  const toLocalDateTimeInput = (dateString) => {
+    if (!dateString) return ''
+    const date = new Date(dateString)
+    const offsetMs = date.getTimezoneOffset() * 60000
+    return new Date(date.getTime() - offsetMs).toISOString().slice(0, 16)
+  }
+
+  const handleEditClick = (symptom) => {
+    setSelectedSymptom(symptom)
+    setEditData({
+      description: symptom.description || '',
+      intensity: symptom.intensity || 5,
+      body_part: symptom.body_part || '',
+      duration: symptom.duration || '',
+      notes: symptom.notes || '',
+      timestamp: toLocalDateTimeInput(symptom.timestamp),
+    })
+    setEditDialog(true)
+  }
+
+  const handleEditChange = (field) => (event) => {
+    setEditData(prev => ({ ...prev, [field]: event.target.value }))
+  }
+
+  const handleEditSave = async () => {
+    if (!selectedSymptom) return
+    if (!editData.description || !editData.body_part || !editData.duration) {
+      alert('Description, zone et durée sont obligatoires.')
+      return
+    }
+
+    const updates = {
+      ...editData,
+      intensity: Number(editData.intensity),
+      timestamp: editData.timestamp ? new Date(editData.timestamp).toISOString() : selectedSymptom.timestamp,
+    }
+
+    const result = await updateSymptom(selectedSymptom.id, updates)
+    if (!result.success) {
+      alert('Erreur lors de la mise à jour du symptôme.')
+      return
+    }
+
+    setEditDialog(false)
+    setSelectedSymptom(null)
+  }
 
   const handleDeleteClick = (symptom) => {
     setSelectedSymptom(symptom)
@@ -326,6 +404,13 @@ const HistoryPage = () => {
                         </Box>
                         <IconButton
                           size="small"
+                          onClick={() => handleEditClick(symptom)}
+                          sx={{ color: '#a1a1aa', '&:hover': { color: '#3b82f6' } }}
+                        >
+                          <Edit fontSize="small" />
+                        </IconButton>
+                        <IconButton
+                          size="small"
                           onClick={() => handleDeleteClick(symptom)}
                           sx={{ color: '#d4d4d8', '&:hover': { color: '#ef4444' } }}
                         >
@@ -402,6 +487,80 @@ const HistoryPage = () => {
             <Button onClick={handleClearAll} color="error" variant="contained">
               Tout supprimer
             </Button>
+          </DialogActions>
+        </Dialog>
+
+        <Dialog open={editDialog} onClose={() => setEditDialog(false)} fullWidth maxWidth="sm">
+          <DialogTitle>Modifier le symptôme</DialogTitle>
+          <DialogContent>
+            <TextField
+              fullWidth
+              multiline
+              rows={3}
+              label="Description"
+              value={editData.description}
+              onChange={handleEditChange('description')}
+              sx={{ mt: 1, mb: 2 }}
+            />
+
+            <FormControl fullWidth sx={{ mb: 2 }}>
+              <InputLabel>Zone du corps</InputLabel>
+              <Select
+                value={editData.body_part}
+                onChange={handleEditChange('body_part')}
+                label="Zone du corps"
+              >
+                {bodyParts.map((part) => (
+                  <MenuItem key={part} value={part}>{part}</MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+
+            <TextField
+              fullWidth
+              type="number"
+              inputProps={{ min: 1, max: 10 }}
+              label="Intensité (1-10)"
+              value={editData.intensity}
+              onChange={handleEditChange('intensity')}
+              sx={{ mb: 2 }}
+            />
+
+            <FormControl fullWidth sx={{ mb: 2 }}>
+              <InputLabel>Durée</InputLabel>
+              <Select
+                value={editData.duration}
+                onChange={handleEditChange('duration')}
+                label="Durée"
+              >
+                {durations.map((duration) => (
+                  <MenuItem key={duration} value={duration}>{duration}</MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+
+            <TextField
+              fullWidth
+              label="Date et heure"
+              type="datetime-local"
+              value={editData.timestamp}
+              onChange={handleEditChange('timestamp')}
+              InputLabelProps={{ shrink: true }}
+              sx={{ mb: 2 }}
+            />
+
+            <TextField
+              fullWidth
+              multiline
+              rows={2}
+              label="Notes"
+              value={editData.notes}
+              onChange={handleEditChange('notes')}
+            />
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setEditDialog(false)}>Annuler</Button>
+            <Button onClick={handleEditSave} variant="contained">Enregistrer</Button>
           </DialogActions>
         </Dialog>
       </Container>

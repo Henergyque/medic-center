@@ -28,6 +28,12 @@ import { motion } from 'framer-motion'
 import { useSymptom } from '../context/SymptomContext'
 import apiService from '../services/apiService'
 
+const getCurrentDateTimeLocal = () => {
+  const now = new Date()
+  const offsetMs = now.getTimezoneOffset() * 60000
+  return new Date(now.getTime() - offsetMs).toISOString().slice(0, 16)
+}
+
 const SymptomInputPage = () => {
   const navigate = useNavigate()
   const { addSymptom } = useSymptom()
@@ -38,6 +44,7 @@ const SymptomInputPage = () => {
     body_part: '',
     duration: '',
     notes: '',
+    timestamp: getCurrentDateTimeLocal(),
   })
   
   const [loading, setLoading] = useState(false)
@@ -107,7 +114,7 @@ const SymptomInputPage = () => {
 
       const analysisResult = await apiService.analyzeSymptoms([{
         ...formData,
-        timestamp: new Date().toISOString()
+        timestamp: new Date(formData.timestamp).toISOString()
       }])
 
       if (analysisResult.success) {
@@ -120,6 +127,7 @@ const SymptomInputPage = () => {
         body_part: '',
         duration: '',
         notes: '',
+        timestamp: getCurrentDateTimeLocal(),
       })
 
     } catch (err) {
@@ -332,6 +340,16 @@ const SymptomInputPage = () => {
               placeholder="Facteurs déclencheurs, traitements essayés..."
               value={formData.notes}
               onChange={handleChange('notes')}
+              sx={{ mb: 3 }}
+            />
+
+            <TextField
+              fullWidth
+              label="Date et heure du symptôme"
+              type="datetime-local"
+              value={formData.timestamp}
+              onChange={handleChange('timestamp')}
+              InputLabelProps={{ shrink: true }}
               sx={{ mb: 3 }}
             />
 

@@ -29,7 +29,7 @@ class StorageService {
       symptoms.push({
         ...symptom,
         id: Date.now(),
-        timestamp: new Date().toISOString()
+        timestamp: symptom.timestamp || new Date().toISOString()
       })
       await localforage.setItem(KEYS.SYMPTOMS, symptoms)
       return true
