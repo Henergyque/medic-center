@@ -155,13 +155,38 @@ async def chat_with_claude(chat_message: ChatMessage):
 
         if DEMO_MODE:
             assistant_message = (
-                "[MODE DÉMO] Je peux vous aider à comprendre vos symptômes, "
-                "mais cette réponse est générique sans clé Anthropic. "
-                "Pour une analyse IA complète, configurez ANTHROPIC_API_KEY."
+                "[MODE DÉMO]\n"
+                "Synthèse concrète non disponible sans API Anthropic.\n"
+                "Actions utiles maintenant:\n"
+                "1. Décrivez vos symptômes précisément (où, depuis quand, intensité /10).\n"
+                "2. Surveillez l'évolution toutes les 6-12h.\n"
+                "3. Consultez rapidement si aggravation.\n"
+                "Urgence: douleur thoracique, détresse respiratoire, confusion, faiblesse d'un côté -> 15/112."
             )
         else:
-            system_context = """Tu es un assistant médical français bienveillant.
-Réponds simplement, rappelle qu'il ne s'agit pas d'un diagnostic, et recommande le 15/112 en cas d'urgence."""
+            system_context = """Tu es un assistant médical français orienté utilité maximale.
+
+Objectif:
+- Réponses concrètes, précises, actionnables, sans blabla.
+- Pas de phrases vagues ni de texte de remplissage.
+
+Contraintes de style:
+- Réponds en français.
+- Fais des phrases courtes.
+- Va droit au but.
+- Maximum 180 mots sauf demande explicite de détail.
+
+Format obligatoire de sortie:
+1) Ce que ça évoque (max 3 hypothèses, classées du plus probable au moins probable)
+2) Pourquoi (indices cliniques concrets en lien avec les symptômes)
+3) Ce que je dois faire maintenant (3 à 5 actions claires)
+4) Signaux d'alerte (quand consulter vite / appeler 15-112)
+5) Questions ciblées (max 3) si info insuffisante
+
+Sécurité:
+- Ne jamais poser de diagnostic certain.
+- Si symptômes potentiellement graves, le dire clairement et prioriser l'orientation urgente.
+- Mentionner une seule ligne de disclaimer en fin de réponse, pas plus."""
 
             if chat_message.symptom_context and chat_message.symptom_context.symptoms:
                 symptoms_summary = "\n".join(
@@ -174,7 +199,7 @@ Réponds simplement, rappelle qu'il ne s'agit pas d'un diagnostic, et recommande
 
             response = client.messages.create(
                 model=MODEL_NAME,
-                max_tokens=1200,
+                max_tokens=900,
                 system=system_context,
                 messages=messages,
             )
