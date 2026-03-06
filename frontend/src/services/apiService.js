@@ -46,12 +46,13 @@ class ApiService {
   
   // === Analyse des symptômes ===
   
-  async analyzeSymptoms(symptoms, userContext = null) {
+  async analyzeSymptoms(symptoms, userContext = null, medicalProfile = null) {
     try {
       const response = await requestWithRetry(
         () => apiClient.post('/api/analyze-symptoms', {
           symptoms,
-          user_context: userContext
+          user_context: userContext,
+          medical_profile: medicalProfile,
         }),
         1
       )
@@ -67,13 +68,14 @@ class ApiService {
   
   // === Chat conversationnel avec Claude ===
   
-  async sendChatMessage(message, history = [], symptomContext = null) {
+  async sendChatMessage(message, history = [], symptomContext = null, medicalProfile = null) {
     try {
       const response = await requestWithRetry(
         () => apiClient.post('/api/chat', {
           message,
           history,
-          symptom_context: symptomContext
+          symptom_context: symptomContext,
+          medical_profile: medicalProfile,
         }),
         1
       )
@@ -89,11 +91,12 @@ class ApiService {
   
   // === Analyse de l'évolution temporelle ===
   
-  async analyzeTemporalEvolution(symptoms) {
+  async analyzeTemporalEvolution(symptoms, medicalProfile = null) {
     try {
       const response = await requestWithRetry(
         () => apiClient.post('/api/analyze-temporal-evolution', {
-          symptoms
+          symptoms,
+          medical_profile: medicalProfile,
         }),
         1
       )

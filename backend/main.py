@@ -54,12 +54,14 @@ class Symptom(BaseModel):
 class SymptomHistory(BaseModel):
     symptoms: List[Symptom]
     user_context: Optional[str] = None
+    medical_profile: Optional[dict] = None
 
 
 class ChatMessage(BaseModel):
     message: str
     history: Optional[List[dict]] = None
     symptom_context: Optional[SymptomHistory] = None
+    medical_profile: Optional[dict] = None
 
 
 class AnalysisResponse(BaseModel):
@@ -78,6 +80,33 @@ def _severity_from_text(text: str) -> str:
     if any(word in lowered for word in ["surveiller", "bénin", "repos"]):
         return "low"
     return "medium"
+
+
+def _profile_to_text(profile: Optional[dict]) -> str:
+    if not profile or not isinstance(profile, dict):
+        return ""
+
+    key_labels = {
+        "birth_date": "Date de naissance",
+        "sex": "Sexe",
+        "height_cm": "Taille (cm)",
+        "weight_kg": "Poids (kg)",
+        "blood_type": "Groupe sanguin",
+        "allergies": "Allergies",
+        "chronic_conditions": "Maladies chroniques",
+        "current_medications": "Traitements en cours",
+        "past_surgeries": "Antécédents chirurgicaux",
+        "doctor_name": "Médecin traitant",
+        "notes": "Notes médicales",
+    }
+
+    lines = []
+    for key, label in key_labels.items():
+        value = profile.get(key)
+        if value is not None and str(value).strip() != "":
+            lines.append(f"- {label}: {value}")
+
+    return "\n".join(lines)
 
 
 @app.get("/api/health")
@@ -101,6 +130,7 @@ async def analyze_symptoms(symptom_history: SymptomHistory):
                 for s in symptom_history.symptoms
             ]
         )
+        profile_text = _profile_to_text(symptom_history.medical_profile)
 
         if DEMO_MODE:
             response_text = f"""[MODE DÉMO - Réponse Générée]
@@ -116,12 +146,20 @@ Basée sur votre description, voici une analyse générale:
 ⚠️ IMPORTANT: Analyse générée en mode démo sans API Anthropic."""
         else:
             system_prompt = """Tu es un assistant médical français.
-Analyse les symptômes, estime la gravité (low/medium/high/urgent), donne des recommandations prudentes et rappelle qu'il ne s'agit pas d'un diagnostic."""
+Analyse les symptômes, estime la gravité (low/medium/high/urgent), donne des recommandations prudentes et rappelle qu'il ne s'agit pas d'un diagnostic.
+
+Règles de sécurité impératives:
+- Le profil médical utilisateur est prioritaire.
+- Si allergies connues: NE JAMAIS recommander ces molécules.
+- Si maladie chronique ou traitement en cours: éviter suggestions incompatibles et mentionner la prudence.
+- Si information insuffisante, poser des questions avant de proposer un médicament."""
             user_prompt = f"""Analyse ces symptômes:
 
 {symptoms_text}
 
-{f"Contexte additionnel: {symptom_history.user_context}" if symptom_history.user_context else ""}"""
+{f"Contexte additionnel: {symptom_history.user_context}" if symptom_history.user_context else ""}
+
+{f"Profil médical utile:\n{profile_text}" if profile_text else ""}"""
 
             message = client.messages.create(
                 model=MODEL_NAME,
@@ -188,6 +226,14 @@ Sécurité:
 - Si symptômes potentiellement graves, le dire clairement et prioriser l'orientation urgente.
 - Mentionner une seule ligne de disclaimer en fin de réponse, pas plus."""
 
+            system_context += """
+
+Règles médicales impératives liées au profil patient:
+- Les données de la fiche médicale sont des contraintes strictes.
+- Si allergie à un médicament/substance: ne jamais le conseiller.
+- Si traitement en cours ou maladie chronique: vérifier la compatibilité et le signaler explicitement.
+- En cas de doute sur compatibilité médicamenteuse: recommander validation pharmacien/médecin."""
+
             if chat_message.symptom_context and chat_message.symptom_context.symptoms:
                 symptoms_summary = "\n".join(
                     [
@@ -196,6 +242,13 @@ Sécurité:
                     ]
                 )
                 system_context += f"\n\nSymptômes actuels:\n{symptoms_summary}"
+
+            profile_text = _profile_to_text(
+                chat_message.medical_profile
+                or (chat_message.symptom_context.medical_profile if chat_message.symptom_context else None)
+            )
+            if profile_text:
+                system_context += f"\n\nProfil médical du patient (à prendre en compte):\n{profile_text}"
 
             response = client.messages.create(
                 model=MODEL_NAME,
@@ -220,6 +273,7 @@ async def analyze_temporal_evolution(symptom_history: SymptomHistory):
             }
 
         sorted_symptoms = sorted(symptom_history.symptoms, key=lambda x: x.timestamp or datetime.now())
+        profile_text = _profile_to_text(symptom_history.medical_profile)
 
         if DEMO_MODE:
             first_intensity = sorted_symptoms[0].intensity
@@ -246,7 +300,10 @@ async def analyze_temporal_evolution(symptom_history: SymptomHistory):
                 model=MODEL_NAME,
                 max_tokens=1200,
                 system="""Analyse l'évolution des symptômes (amélioration/aggravation/stagnation) et reste prudent.""",
-                messages=[{"role": "user", "content": timeline}],
+                messages=[{
+                    "role": "user",
+                    "content": f"{timeline}\n\n{f'Profil médical utile:\n{profile_text}' if profile_text else ''}",
+                }],
             )
             analysis = response.content[0].text
             if "aggrav" in analysis.lower() or "wors" in analysis.lower():

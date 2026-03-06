@@ -71,6 +71,7 @@ const ChatPage = () => {
 
     try {
       await storageService.saveChatMessage(userMessage)
+      const medicalProfile = await storageService.getMedicalProfile()
 
       const symptomContext = symptoms.length > 0 ? {
         symptoms: symptoms.slice(-5)
@@ -84,7 +85,8 @@ const ChatPage = () => {
       const response = await apiService.sendChatMessage(
         input,
         chatHistory,
-        symptomContext
+        symptomContext,
+        medicalProfile
       )
 
       if (response.success) {

@@ -36,6 +36,7 @@ import { format } from 'date-fns'
 import { fr } from 'date-fns/locale'
 import { useSymptom } from '../context/SymptomContext'
 import apiService from '../services/apiService'
+import storageService from '../services/storageService'
 
 const HistoryPage = () => {
   const navigate = useNavigate()
@@ -160,7 +161,8 @@ const HistoryPage = () => {
 
     setAnalyzingEvolution(true)
     try {
-      const result = await apiService.analyzeTemporalEvolution(symptoms)
+      const medicalProfile = await storageService.getMedicalProfile()
+      const result = await apiService.analyzeTemporalEvolution(symptoms, medicalProfile)
       if (result.success) {
         setEvolution(result.data)
       } else {

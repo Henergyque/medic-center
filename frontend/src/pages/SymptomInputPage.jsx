@@ -27,6 +27,7 @@ import {
 import { motion } from 'framer-motion'
 import { useSymptom } from '../context/SymptomContext'
 import apiService from '../services/apiService'
+import storageService from '../services/storageService'
 
 const getCurrentDateTimeLocal = () => {
   const now = new Date()
@@ -148,7 +149,8 @@ const SymptomInputPage = () => {
     setLoading(true)
     setError(null)
     try {
-      const analysisResult = await apiService.analyzeSymptoms([pendingForAnalysis])
+      const medicalProfile = await storageService.getMedicalProfile()
+      const analysisResult = await apiService.analyzeSymptoms([pendingForAnalysis], null, medicalProfile)
       if (analysisResult.success) {
         setAnalysis(analysisResult.data)
         setSavedNotice(false)
