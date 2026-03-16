@@ -537,21 +537,26 @@ async def extract_symptoms_from_document(doc_id: str):
     response = client.messages.create(
         model=MODEL_NAME,
         max_tokens=2000,
-        system="""Tu es un extracteur de données médicales. On te donne le texte d'un document médical.
-Extrais TOUS les symptômes mentionnés et retourne un tableau JSON strict.
+        system="""Tu es un extracteur de données médicales expert. On te donne le texte d'un document médical PDF.
+Tu dois extraire ABSOLUMENT TOUS les symptômes, plaintes, douleurs, gênes, résultats anormaux et problèmes de santé mentionnés.
 
-Chaque symptôme doit avoir ces champs :
-- "description": description courte du symptôme (string)
-- "intensity": intensité estimée de 1 à 10 (integer)
-- "body_part": zone du corps parmi: Tête, Gorge, Poitrine, Abdomen, Dos, Bras gauche, Bras droit, Jambe gauche, Jambe droite, Cou, Épaules, Mains, Pieds, Peau, Autre (string)
-- "duration": durée parmi: Moins d'1 heure, 1-6 heures, 6-24 heures, 1-3 jours, 3-7 jours, Plus d'1 semaine, Récurrent (string)
-- "notes": détails supplémentaires ou contexte (string)
-- "timestamp": date/heure si mentionnée au format ISO, sinon null (string ou null)
+Retourne un tableau JSON strict. Chaque entrée correspond à UN symptôme distinct.
 
-Réponds UNIQUEMENT avec le tableau JSON, sans texte autour, sans markdown.
-Si aucun symptôme n'est trouvé, retourne [].
-Estime l'intensité en fonction de la gravité décrite.
-Si la date n'est pas précisée, utilise null pour timestamp.""",
+Champs obligatoires pour chaque symptôme :
+- "description": description précise et complète du symptôme tel que décrit dans le document (string, ex: "Douleur thoracique aiguë irradiant vers le bras gauche")
+- "intensity": intensité estimée de 1 à 10 basée sur les qualificatifs utilisés (léger=2-3, modéré=4-5, important/sévère=6-8, insupportable/critique=9-10) (integer)
+- "body_part": zone du corps concernée, UNIQUEMENT parmi: Tête, Gorge, Poitrine, Abdomen, Dos, Bras gauche, Bras droit, Jambe gauche, Jambe droite, Cou, Épaules, Mains, Pieds, Peau, Autre (string)
+- "duration": durée UNIQUEMENT parmi: Moins d'1 heure, 1-6 heures, 6-24 heures, 1-3 jours, 3-7 jours, Plus d'1 semaine, Récurrent (string)
+- "notes": TOUT le contexte médical pertinent : diagnostic associé, traitements prescrits, résultats d'examens, observations du médecin, antécédents liés (string, sois détaillé)
+- "timestamp": date mentionnée dans le document au format ISO 8601 (ex: "2025-06-15T10:00:00"), ou null si non mentionnée (string ou null)
+
+Règles :
+- Sois exhaustif : chaque symptôme distinct = une entrée séparée
+- Si le document mentionne des résultats de labo anormaux (ex: CRP élevée, anémie), crée une entrée pour chacun
+- Inclus les symptômes passés ET présents
+- Dans "notes", cite les valeurs numériques (ex: "CRP à 45 mg/L, norme < 5"), les médicaments prescrits, le nom du médecin si présent
+- Réponds UNIQUEMENT avec le tableau JSON brut, sans markdown, sans texte avant/après
+- Si aucun symptôme trouvé, retourne []""",
         messages=[{"role": "user", "content": f"Texte du document :\n\n{truncated}"}],
     )
 

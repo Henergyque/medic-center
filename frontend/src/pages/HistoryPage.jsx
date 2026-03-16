@@ -64,6 +64,7 @@ const HistoryPage = () => {
   const [documents, setDocuments] = useState([])
   const [uploading, setUploading] = useState(false)
   const [uploadError, setUploadError] = useState(null)
+  const [uploadSuccess, setUploadSuccess] = useState(null)
   const [analyzingDoc, setAnalyzingDoc] = useState(null)
   const [docAnalysis, setDocAnalysis] = useState(null)
   const [deleteDocDialog, setDeleteDocDialog] = useState(null)
@@ -108,6 +109,7 @@ const HistoryPage = () => {
     }
     setUploading(true)
     setUploadError(null)
+    setUploadSuccess(null)
 
     // 1. Upload the file
     const uploadResult = await apiService.uploadDocument(file)
@@ -124,20 +126,27 @@ const HistoryPage = () => {
     // 2. Extract symptoms from the PDF and add them to history
     const extractResult = await apiService.extractSymptomsFromDocument(docId)
     if (extractResult.success && extractResult.data.symptoms.length > 0) {
+      let added = 0
       for (const s of extractResult.data.symptoms) {
-        await addSymptom({
+        const result = await addSymptom({
           description: s.description,
           intensity: s.intensity,
           body_part: s.body_part,
           duration: s.duration,
-          notes: s.notes || `Importé depuis « ${file.name} »`,
+          notes: s.notes || '',
+          source: `PDF: ${file.name}`,
           timestamp: s.timestamp || new Date().toISOString(),
         })
+        if (result.success) added++
+        // Small delay to avoid duplicate IDs (Date.now)
+        await new Promise(r => setTimeout(r, 5))
       }
+      setUploadError(null)
+      setUploadSuccess(`${added} symptôme${added > 1 ? 's' : ''} extrait${added > 1 ? 's' : ''} et ajouté${added > 1 ? 's' : ''} depuis « ${file.name} »`)
     } else if (extractResult.success && extractResult.data.symptoms.length === 0) {
       setUploadError('Aucun symptôme trouvé dans ce document.')
     } else {
-      setUploadError(extractResult.error || 'Erreur lors de l\'extraction des symptômes.')
+      setUploadError(extractResult.error || "Erreur lors de l'extraction des symptômes.")
     }
 
     setUploading(false)
@@ -467,6 +476,12 @@ const HistoryPage = () => {
                 </Alert>
               )}
 
+              {uploadSuccess && (
+                <Alert severity="success" sx={{ mb: 1.5 }} onClose={() => setUploadSuccess(null)}>
+                  {uploadSuccess}
+                </Alert>
+              )}
+
               {/* Analysis result */}
               {docAnalysis && (
                 <Alert
@@ -654,6 +669,14 @@ const HistoryPage = () => {
                           variant="outlined"
                           sx={{ borderColor: '#e5e7eb', color: '#64748b' }}
                         />
+                        {symptom.source && (
+                          <Chip
+                            icon={<PictureAsPdf sx={{ fontSize: '14px !important' }} />}
+                            label={symptom.source}
+                            size="small"
+                            sx={{ bgcolor: '#fef2f2', color: '#ef4444', fontWeight: 500 }}
+                          />
+                        )}
                       </Box>
 
                       {symptom.notes && (
