@@ -423,6 +423,20 @@ const HistoryPage = () => {
             <Box sx={{ display: 'flex', gap: 1.5, mb: 2 }}>
               <Button
                 variant="contained"
+                startIcon={uploading ? <CircularProgress size={18} color="inherit" /> : <CloudUpload />}
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploading}
+                size="small"
+                sx={{
+                  flex: 1,
+                  background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
+                  '&:hover': { background: 'linear-gradient(135deg, #4f46e5, #7c3aed)' },
+                }}
+              >
+                {uploading ? 'Extraction…' : 'Importer PDF'}
+              </Button>
+              <Button
+                variant="contained"
                 startIcon={generating ? <CircularProgress size={18} color="inherit" /> : <PictureAsPdf />}
                 onClick={handleGeneratePDF}
                 disabled={generating}
@@ -447,119 +461,43 @@ const HistoryPage = () => {
               </Button>
             </Box>
 
-            {/* Import PDF section */}
-            <Paper sx={{ p: 2, mb: 3 }}>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".pdf"
-                hidden
-                onChange={handleFileUpload}
-              />
-              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: documents.length > 0 ? 2 : 0 }}>
-                <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
-                  Importer un PDF de symptômes
+            {/* Hidden file input */}
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".pdf"
+              hidden
+              onChange={handleFileUpload}
+            />
+
+            {/* Import feedback */}
+            {uploadError && (
+              <Alert severity="error" sx={{ mb: 2 }} onClose={() => setUploadError(null)}>
+                {uploadError}
+              </Alert>
+            )}
+            {uploadSuccess && (
+              <Alert severity="success" sx={{ mb: 2 }} onClose={() => setUploadSuccess(null)}>
+                {uploadSuccess}
+              </Alert>
+            )}
+
+            {/* Analyse IA result */}
+            {docAnalysis && (
+              <Alert
+                severity="info"
+                sx={{ mb: 2 }}
+                onClose={() => setDocAnalysis(null)}
+                icon={<AutoAwesome />}
+              >
+                <Typography variant="subtitle2" gutterBottom sx={{ fontWeight: 600 }}>
+                  Analyse – {docAnalysis.document_name}
                 </Typography>
-                <Button
-                  size="small"
-                  startIcon={uploading ? <CircularProgress size={16} color="inherit" /> : <CloudUpload />}
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={uploading}
-                >
-                  {uploading ? 'Extraction…' : 'Importer'}
-                </Button>
-              </Box>
-
-              {uploadError && (
-                <Alert severity="error" sx={{ mb: 1.5 }} onClose={() => setUploadError(null)}>
-                  {uploadError}
-                </Alert>
-              )}
-
-              {uploadSuccess && (
-                <Alert severity="success" sx={{ mb: 1.5 }} onClose={() => setUploadSuccess(null)}>
-                  {uploadSuccess}
-                </Alert>
-              )}
-
-              {/* Analysis result */}
-              {docAnalysis && (
-                <Alert
-                  severity="info"
-                  sx={{ mb: 2 }}
-                  onClose={() => setDocAnalysis(null)}
-                  icon={<AutoAwesome />}
-                >
-                  <Typography variant="subtitle2" gutterBottom sx={{ fontWeight: 600 }}>
-                    Analyse – {docAnalysis.document_name}
-                  </Typography>
-                  <Typography variant="body2" sx={{ whiteSpace: 'pre-line' }}>
-                    {docAnalysis.summary}
-                  </Typography>
-                </Alert>
-              )}
-
-              {/* Document list */}
-              {documents.length > 0 && (
-                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                  {documents.slice().reverse().map((doc) => (
-                    <Box
-                      key={doc.id}
-                      sx={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        p: 1.2,
-                        borderRadius: 2,
-                        bgcolor: '#fef2f2',
-                        gap: 1.5,
-                      }}
-                    >
-                      <PictureAsPdf sx={{ color: '#ef4444', fontSize: 20 }} />
-                      <Box sx={{ flexGrow: 1, minWidth: 0 }}>
-                        <Typography
-                          variant="body2"
-                          sx={{
-                            fontWeight: 600,
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis',
-                            whiteSpace: 'nowrap',
-                            fontSize: '0.8rem',
-                          }}
-                        >
-                          {doc.original_name}
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary">
-                          {formatDocSize(doc.size_bytes)} · {doc.page_count} p.
-                        </Typography>
-                      </Box>
-                      <IconButton size="small" onClick={() => handleViewDoc(doc)} title="Voir">
-                        <Visibility fontSize="small" sx={{ color: '#6366f1' }} />
-                      </IconButton>
-                      <IconButton
-                        size="small"
-                        onClick={() => handleAnalyzeDoc(doc)}
-                        disabled={analyzingDoc === doc.id}
-                        title="Analyser"
-                      >
-                        {analyzingDoc === doc.id ? (
-                          <CircularProgress size={16} />
-                        ) : (
-                          <AutoAwesome fontSize="small" sx={{ color: '#f59e0b' }} />
-                        )}
-                      </IconButton>
-                      <IconButton
-                        size="small"
-                        onClick={() => setDeleteDocDialog(doc)}
-                        title="Supprimer"
-                        sx={{ color: '#d4d4d8', '&:hover': { color: '#ef4444' } }}
-                      >
-                        <Delete fontSize="small" />
-                      </IconButton>
-                    </Box>
-                  ))}
-                </Box>
-              )}
-            </Paper>
+                <Typography variant="body2" sx={{ whiteSpace: 'pre-line' }}>
+                  {docAnalysis.summary}
+                </Typography>
+              </Alert>
+            )}
 
             {/* Résultat analyse d'évolution */}
             {evolution && (
