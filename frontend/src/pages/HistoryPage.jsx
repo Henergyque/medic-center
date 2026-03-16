@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   Box,
@@ -30,6 +30,9 @@ import {
   TrendingFlat,
   Add,
   Edit,
+  CloudUpload,
+  Visibility,
+  AutoAwesome,
 } from '@mui/icons-material'
 import { motion } from 'framer-motion'
 import { format } from 'date-fns'
@@ -57,6 +60,15 @@ const HistoryPage = () => {
   const [evolution, setEvolution] = useState(null)
   const [analyzingEvolution, setAnalyzingEvolution] = useState(false)
 
+  // PDF documents state
+  const [documents, setDocuments] = useState([])
+  const [uploading, setUploading] = useState(false)
+  const [uploadError, setUploadError] = useState(null)
+  const [analyzingDoc, setAnalyzingDoc] = useState(null)
+  const [docAnalysis, setDocAnalysis] = useState(null)
+  const [deleteDocDialog, setDeleteDocDialog] = useState(null)
+  const fileInputRef = useRef(null)
+
   const bodyParts = [
     'Tête', 'Gorge', 'Poitrine', 'Abdomen', 'Dos',
     'Bras gauche', 'Bras droit', 'Jambe gauche', 'Jambe droite',
@@ -72,6 +84,73 @@ const HistoryPage = () => {
     'Plus d\'1 semaine',
     'Récurrent'
   ]
+
+  // Load documents on mount
+  useEffect(() => {
+    loadDocuments()
+  }, [])
+
+  const loadDocuments = async () => {
+    const result = await apiService.getDocuments()
+    if (result.success) setDocuments(result.data)
+  }
+
+  const handleFileUpload = async (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    if (!file.name.toLowerCase().endsWith('.pdf')) {
+      setUploadError('Seuls les fichiers PDF sont acceptés.')
+      return
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      setUploadError('Le fichier ne doit pas dépasser 10 Mo.')
+      return
+    }
+    setUploading(true)
+    setUploadError(null)
+    const result = await apiService.uploadDocument(file)
+    if (result.success) {
+      await loadDocuments()
+    } else {
+      setUploadError(result.error)
+    }
+    setUploading(false)
+    if (fileInputRef.current) fileInputRef.current.value = ''
+  }
+
+  const handleViewDoc = (doc) => {
+    window.open(apiService.getDocumentUrl(doc.id), '_blank', 'noopener')
+  }
+
+  const handleAnalyzeDoc = async (doc) => {
+    setAnalyzingDoc(doc.id)
+    setDocAnalysis(null)
+    const result = await apiService.analyzeDocument(doc.id)
+    if (result.success) {
+      setDocAnalysis({ ...result.data, docId: doc.id })
+    } else {
+      setUploadError(result.error)
+    }
+    setAnalyzingDoc(null)
+  }
+
+  const handleDeleteDoc = async () => {
+    if (!deleteDocDialog) return
+    const result = await apiService.deleteDocument(deleteDocDialog.id)
+    if (result.success) {
+      setDocuments((prev) => prev.filter((d) => d.id !== deleteDocDialog.id))
+      if (docAnalysis && docAnalysis.docId === deleteDocDialog.id) setDocAnalysis(null)
+    } else {
+      setUploadError(result.error)
+    }
+    setDeleteDocDialog(null)
+  }
+
+  const formatDocSize = (bytes) => {
+    if (bytes < 1024) return `${bytes} o`
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} Ko`
+    return `${(bytes / (1024 * 1024)).toFixed(1)} Mo`
+  }
 
   const toLocalDateTimeInput = (dateString) => {
     if (!dateString) return ''
@@ -306,7 +385,7 @@ const HistoryPage = () => {
         ) : (
           <>
             {/* Actions */}
-            <Box sx={{ display: 'flex', gap: 1.5, mb: 3 }}>
+            <Box sx={{ display: 'flex', gap: 1.5, mb: 2 }}>
               <Button
                 variant="contained"
                 startIcon={generating ? <CircularProgress size={18} color="inherit" /> : <PictureAsPdf />}
@@ -332,6 +411,114 @@ const HistoryPage = () => {
                 Évolution
               </Button>
             </Box>
+
+            {/* Import PDF section */}
+            <Paper sx={{ p: 2, mb: 3 }}>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".pdf"
+                hidden
+                onChange={handleFileUpload}
+              />
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: documents.length > 0 ? 2 : 0 }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
+                  PDF d'anciens symptômes
+                </Typography>
+                <Button
+                  size="small"
+                  startIcon={uploading ? <CircularProgress size={16} color="inherit" /> : <CloudUpload />}
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={uploading}
+                >
+                  Importer
+                </Button>
+              </Box>
+
+              {uploadError && (
+                <Alert severity="error" sx={{ mb: 1.5 }} onClose={() => setUploadError(null)}>
+                  {uploadError}
+                </Alert>
+              )}
+
+              {/* Analysis result */}
+              {docAnalysis && (
+                <Alert
+                  severity="info"
+                  sx={{ mb: 2 }}
+                  onClose={() => setDocAnalysis(null)}
+                  icon={<AutoAwesome />}
+                >
+                  <Typography variant="subtitle2" gutterBottom sx={{ fontWeight: 600 }}>
+                    Analyse – {docAnalysis.document_name}
+                  </Typography>
+                  <Typography variant="body2" sx={{ whiteSpace: 'pre-line' }}>
+                    {docAnalysis.summary}
+                  </Typography>
+                </Alert>
+              )}
+
+              {/* Document list */}
+              {documents.length > 0 && (
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                  {documents.slice().reverse().map((doc) => (
+                    <Box
+                      key={doc.id}
+                      sx={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        p: 1.2,
+                        borderRadius: 2,
+                        bgcolor: '#fef2f2',
+                        gap: 1.5,
+                      }}
+                    >
+                      <PictureAsPdf sx={{ color: '#ef4444', fontSize: 20 }} />
+                      <Box sx={{ flexGrow: 1, minWidth: 0 }}>
+                        <Typography
+                          variant="body2"
+                          sx={{
+                            fontWeight: 600,
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap',
+                            fontSize: '0.8rem',
+                          }}
+                        >
+                          {doc.original_name}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          {formatDocSize(doc.size_bytes)} · {doc.page_count} p.
+                        </Typography>
+                      </Box>
+                      <IconButton size="small" onClick={() => handleViewDoc(doc)} title="Voir">
+                        <Visibility fontSize="small" sx={{ color: '#6366f1' }} />
+                      </IconButton>
+                      <IconButton
+                        size="small"
+                        onClick={() => handleAnalyzeDoc(doc)}
+                        disabled={analyzingDoc === doc.id}
+                        title="Analyser"
+                      >
+                        {analyzingDoc === doc.id ? (
+                          <CircularProgress size={16} />
+                        ) : (
+                          <AutoAwesome fontSize="small" sx={{ color: '#f59e0b' }} />
+                        )}
+                      </IconButton>
+                      <IconButton
+                        size="small"
+                        onClick={() => setDeleteDocDialog(doc)}
+                        title="Supprimer"
+                        sx={{ color: '#d4d4d8', '&:hover': { color: '#ef4444' } }}
+                      >
+                        <Delete fontSize="small" />
+                      </IconButton>
+                    </Box>
+                  ))}
+                </Box>
+              )}
+            </Paper>
 
             {/* Résultat analyse d'évolution */}
             {evolution && (
@@ -563,6 +750,20 @@ const HistoryPage = () => {
           <DialogActions>
             <Button onClick={() => setEditDialog(false)}>Annuler</Button>
             <Button onClick={handleEditSave} variant="contained">Enregistrer</Button>
+          </DialogActions>
+        </Dialog>
+
+        {/* Delete document dialog */}
+        <Dialog open={!!deleteDocDialog} onClose={() => setDeleteDocDialog(null)}>
+          <DialogTitle>Supprimer ce document ?</DialogTitle>
+          <DialogContent>
+            <Typography>
+              « {deleteDocDialog?.original_name} » sera supprimé définitivement.
+            </Typography>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setDeleteDocDialog(null)}>Annuler</Button>
+            <Button onClick={handleDeleteDoc} color="error">Supprimer</Button>
           </DialogActions>
         </Dialog>
       </Container>
