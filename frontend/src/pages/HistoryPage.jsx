@@ -391,6 +391,27 @@ const HistoryPage = () => {
       </Box>
 
       <Container maxWidth="md" sx={{ mt: -2.5, position: 'relative', zIndex: 2 }}>
+        {/* Hidden file input — always present */}
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".pdf"
+          hidden
+          onChange={handleFileUpload}
+        />
+
+        {/* Import feedback — always visible */}
+        {uploadError && (
+          <Alert severity="error" sx={{ mb: 2 }} onClose={() => setUploadError(null)}>
+            {uploadError}
+          </Alert>
+        )}
+        {uploadSuccess && (
+          <Alert severity="success" sx={{ mb: 2 }} onClose={() => setUploadSuccess(null)}>
+            {uploadSuccess}
+          </Alert>
+        )}
+
         {symptoms.length === 0 ? (
           <motion.div
             initial={{ opacity: 0, y: 10 }}
@@ -402,19 +423,33 @@ const HistoryPage = () => {
                 Aucun symptôme enregistré
               </Typography>
               <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-                Commencez à enregistrer vos symptômes pour suivre leur évolution
+                Commencez à enregistrer vos symptômes ou importez un PDF
               </Typography>
-              <Button
-                variant="contained"
-                startIcon={<Add />}
-                onClick={() => navigate('/symptom-input')}
-                sx={{
-                  background: 'linear-gradient(135deg, #10b981, #059669)',
-                  '&:hover': { background: 'linear-gradient(135deg, #059669, #047857)' },
-                }}
-              >
-                Enregistrer un symptôme
-              </Button>
+              <Box sx={{ display: 'flex', gap: 1.5, justifyContent: 'center', flexWrap: 'wrap' }}>
+                <Button
+                  variant="contained"
+                  startIcon={<Add />}
+                  onClick={() => navigate('/symptom-input')}
+                  sx={{
+                    background: 'linear-gradient(135deg, #10b981, #059669)',
+                    '&:hover': { background: 'linear-gradient(135deg, #059669, #047857)' },
+                  }}
+                >
+                  Enregistrer un symptôme
+                </Button>
+                <Button
+                  variant="contained"
+                  startIcon={uploading ? <CircularProgress size={18} color="inherit" /> : <CloudUpload />}
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={uploading}
+                  sx={{
+                    background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
+                    '&:hover': { background: 'linear-gradient(135deg, #4f46e5, #7c3aed)' },
+                  }}
+                >
+                  {uploading ? 'Extraction…' : 'Importer un PDF'}
+                </Button>
+              </Box>
             </Paper>
           </motion.div>
         ) : (
@@ -460,27 +495,6 @@ const HistoryPage = () => {
                 Évolution
               </Button>
             </Box>
-
-            {/* Hidden file input */}
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".pdf"
-              hidden
-              onChange={handleFileUpload}
-            />
-
-            {/* Import feedback */}
-            {uploadError && (
-              <Alert severity="error" sx={{ mb: 2 }} onClose={() => setUploadError(null)}>
-                {uploadError}
-              </Alert>
-            )}
-            {uploadSuccess && (
-              <Alert severity="success" sx={{ mb: 2 }} onClose={() => setUploadSuccess(null)}>
-                {uploadSuccess}
-              </Alert>
-            )}
 
             {/* Analyse IA result */}
             {docAnalysis && (
