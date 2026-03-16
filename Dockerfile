@@ -19,5 +19,7 @@ RUN pip install --no-cache-dir -r /app/backend/requirements.txt
 COPY backend/ /app/backend/
 COPY --from=frontend-builder /app/frontend/dist /app/frontend/dist
 
+RUN mkdir -p /app/backend/uploads
+
 EXPOSE 8000
-CMD ["sh", "-c", "uvicorn main:app --app-dir backend --host 0.0.0.0 --port ${PORT:-8000} --workers ${WEB_CONCURRENCY:-2} --timeout-keep-alive ${UVICORN_KEEP_ALIVE:-10}"]
+CMD ["sh", "-c", "echo 'Starting server on port ${PORT:-8000}...' && uvicorn main:app --app-dir backend --host 0.0.0.0 --port ${PORT:-8000} --workers 1 --timeout-keep-alive 30 --log-level info"]

@@ -14,12 +14,22 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from PyPDF2 import PdfReader
 import io
+import logging
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 from pdf_generator import router as pdf_router
 
 load_dotenv()
 
 app = FastAPI(title="Symptom Checker API", version="1.0.0")
+
+
+@app.on_event("startup")
+async def startup_event():
+    logger.info(f"Server starting - DEMO_MODE={DEMO_MODE}, FRONTEND_DIST={FRONTEND_DIST}, exists={FRONTEND_DIST.exists()}")
+    logger.info(f"UPLOADS_DIR={UPLOADS_DIR}, exists={UPLOADS_DIR.exists()}")
 
 
 def _build_allowed_origins() -> List[str]:
