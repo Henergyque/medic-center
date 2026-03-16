@@ -167,13 +167,14 @@ Règles de sécurité impératives:
 - Si allergies connues: NE JAMAIS recommander ces molécules.
 - Si maladie chronique ou traitement en cours: éviter suggestions incompatibles et mentionner la prudence.
 - Si information insuffisante, poser des questions avant de proposer un médicament."""
+            _nl = '\n'
             user_prompt = f"""Analyse ces symptômes:
 
 {symptoms_text}
 
-{f"Contexte additionnel: {symptom_history.user_context}" if symptom_history.user_context else ""}
+{('Contexte additionnel: ' + symptom_history.user_context) if symptom_history.user_context else ''}
 
-{f"Profil médical utile:\n{profile_text}" if profile_text else ""}"""
+{('Profil médical utile:' + _nl + profile_text) if profile_text else ''}"""
 
             message = client.messages.create(
                 model=MODEL_NAME,
@@ -316,7 +317,7 @@ async def analyze_temporal_evolution(symptom_history: SymptomHistory):
                 system="""Analyse l'évolution des symptômes (amélioration/aggravation/stagnation) et reste prudent.""",
                 messages=[{
                     "role": "user",
-                    "content": f"{timeline}\n\n{f'Profil médical utile:\n{profile_text}' if profile_text else ''}",
+                    "content": timeline + (('\n\nProfil médical utile:\n' + profile_text) if profile_text else ''),
                 }],
             )
             analysis = response.content[0].text
