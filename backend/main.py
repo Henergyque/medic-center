@@ -2,14 +2,18 @@ from datetime import datetime
 from pathlib import Path
 from typing import List, Optional
 import os
+import json
+import uuid
 
 import anthropic
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
+from PyPDF2 import PdfReader
+import io
 
 from pdf_generator import router as pdf_router
 
@@ -316,6 +320,168 @@ async def analyze_temporal_evolution(symptom_history: SymptomHistory):
         return {"evolution": trend, "analysis": analysis, "timestamp": datetime.now().isoformat()}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Erreur lors de l'analyse temporelle: {str(e)}")
+
+
+# === Gestion des documents PDF ===
+
+UPLOADS_DIR = BASE_DIR / "uploads"
+UPLOADS_DIR.mkdir(exist_ok=True)
+DOCUMENTS_INDEX = UPLOADS_DIR / "index.json"
+
+
+def _load_documents_index():
+    if DOCUMENTS_INDEX.exists():
+        return json.loads(DOCUMENTS_INDEX.read_text(encoding="utf-8"))
+    return []
+
+
+def _save_documents_index(docs):
+    DOCUMENTS_INDEX.write_text(json.dumps(docs, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def _extract_pdf_text(file_bytes: bytes) -> str:
+    reader = PdfReader(io.BytesIO(file_bytes))
+    text_parts = []
+    for page in reader.pages:
+        page_text = page.extract_text()
+        if page_text:
+            text_parts.append(page_text)
+    return "\n".join(text_parts)
+
+
+@app.post("/api/documents/upload")
+async def upload_document(file: UploadFile = File(...)):
+    if not file.filename or not file.filename.lower().endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="Seuls les fichiers PDF sont acceptés.")
+
+    contents = await file.read()
+    if len(contents) > 10 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="Le fichier ne doit pas dépasser 10 Mo.")
+
+    doc_id = str(uuid.uuid4())
+    safe_filename = f"{doc_id}.pdf"
+    file_path = UPLOADS_DIR / safe_filename
+
+    file_path.write_bytes(contents)
+
+    try:
+        extracted_text = _extract_pdf_text(contents)
+    except Exception:
+        extracted_text = ""
+
+    doc_entry = {
+        "id": doc_id,
+        "original_name": file.filename,
+        "stored_name": safe_filename,
+        "uploaded_at": datetime.now().isoformat(),
+        "size_bytes": len(contents),
+        "page_count": len(PdfReader(io.BytesIO(contents)).pages),
+        "has_text": bool(extracted_text.strip()),
+    }
+
+    docs = _load_documents_index()
+    docs.append(doc_entry)
+    _save_documents_index(docs)
+
+    return {
+        "success": True,
+        "document": doc_entry,
+        "preview": extracted_text[:500] if extracted_text else None,
+    }
+
+
+@app.get("/api/documents")
+async def list_documents():
+    docs = _load_documents_index()
+    return {"documents": docs}
+
+
+@app.get("/api/documents/{doc_id}")
+async def get_document_file(doc_id: str):
+    docs = _load_documents_index()
+    doc = next((d for d in docs if d["id"] == doc_id), None)
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document non trouvé.")
+
+    file_path = UPLOADS_DIR / doc["stored_name"]
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="Fichier introuvable.")
+
+    return FileResponse(
+        path=str(file_path),
+        media_type="application/pdf",
+        filename=doc["original_name"],
+    )
+
+
+@app.delete("/api/documents/{doc_id}")
+async def delete_document(doc_id: str):
+    docs = _load_documents_index()
+    doc = next((d for d in docs if d["id"] == doc_id), None)
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document non trouvé.")
+
+    file_path = UPLOADS_DIR / doc["stored_name"]
+    if file_path.exists():
+        file_path.unlink()
+
+    docs = [d for d in docs if d["id"] != doc_id]
+    _save_documents_index(docs)
+
+    return {"success": True}
+
+
+@app.post("/api/documents/{doc_id}/analyze")
+async def analyze_document(doc_id: str):
+    docs = _load_documents_index()
+    doc = next((d for d in docs if d["id"] == doc_id), None)
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document non trouvé.")
+
+    file_path = UPLOADS_DIR / doc["stored_name"]
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="Fichier introuvable.")
+
+    try:
+        extracted_text = _extract_pdf_text(file_path.read_bytes())
+    except Exception as e:
+        raise HTTPException(status_code=422, detail=f"Impossible de lire le PDF: {str(e)}")
+
+    if not extracted_text.strip():
+        raise HTTPException(
+            status_code=422,
+            detail="Aucun texte extractible dans ce PDF (document scanné ou image).",
+        )
+
+    # Limiter le texte envoyé à Claude
+    truncated = extracted_text[:6000]
+
+    if DEMO_MODE:
+        summary = (
+            f"[MODE DÉMO] Document « {doc['original_name']} » ({doc['page_count']} page(s)).\n\n"
+            f"Aperçu du contenu extrait :\n{truncated[:800]}...\n\n"
+            "Analyse détaillée non disponible sans API Anthropic."
+        )
+    else:
+        response = client.messages.create(
+            model=MODEL_NAME,
+            max_tokens=1200,
+            system="""Tu es un assistant médical français. On te donne le texte extrait d'un document médical PDF.
+Résume le contenu de façon structurée :
+1) Type de document (ordonnance, résultats labo, compte-rendu, etc.)
+2) Informations clés (résultats, prescriptions, diagnostics)
+3) Points d'attention importants
+Sois factuel sans interpréter au-delà du texte. Rappelle que cela ne constitue pas un avis médical.""",
+            messages=[{"role": "user", "content": f"Voici le texte du document :\n\n{truncated}"}],
+        )
+        summary = response.content[0].text
+
+    return {
+        "summary": summary,
+        "document_name": doc["original_name"],
+        "page_count": doc["page_count"],
+        "timestamp": datetime.now().isoformat(),
+    }
 
 
 app.include_router(pdf_router)

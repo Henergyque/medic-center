@@ -6,6 +6,7 @@ import SymptomInputPage from './pages/SymptomInputPage'
 import ChatPage from './pages/ChatPage'
 import HistoryPage from './pages/HistoryPage'
 import MedicalProfilePage from './pages/MedicalProfilePage'
+import DocumentsPage from './pages/DocumentsPage'
 import BottomNavigation from './components/BottomNavigation'
 import NotificationManager from './components/NotificationManager'
 import { SymptomProvider } from './context/SymptomContext'
@@ -35,6 +36,7 @@ function App() {
           <Route path="/chat" element={<ChatPage />} />
           <Route path="/history" element={<HistoryPage />} />
           <Route path="/medical-profile" element={<MedicalProfilePage />} />
+          <Route path="/documents" element={<DocumentsPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
         

@@ -150,6 +150,66 @@ class ApiService {
       return { success: false, error: 'API non disponible' }
     }
   }
+
+  // === Gestion des documents PDF ===
+
+  async uploadDocument(file) {
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
+      const response = await apiClient.post('/api/documents/upload', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+        timeout: 60000,
+      })
+      return { success: true, data: response.data }
+    } catch (error) {
+      console.error('Erreur lors de l\'upload:', error)
+      return {
+        success: false,
+        error: error.response?.data?.detail || 'Erreur lors de l\'envoi du fichier',
+      }
+    }
+  }
+
+  async getDocuments() {
+    try {
+      const response = await apiClient.get('/api/documents')
+      return { success: true, data: response.data.documents }
+    } catch (error) {
+      console.error('Erreur lors de la récupération des documents:', error)
+      return { success: false, error: extractErrorMessage(error) }
+    }
+  }
+
+  async deleteDocument(docId) {
+    try {
+      await apiClient.delete(`/api/documents/${encodeURIComponent(docId)}`)
+      return { success: true }
+    } catch (error) {
+      console.error('Erreur lors de la suppression:', error)
+      return { success: false, error: extractErrorMessage(error) }
+    }
+  }
+
+  async analyzeDocument(docId) {
+    try {
+      const response = await requestWithRetry(
+        () => apiClient.post(`/api/documents/${encodeURIComponent(docId)}/analyze`),
+        1
+      )
+      return { success: true, data: response.data }
+    } catch (error) {
+      console.error('Erreur lors de l\'analyse du document:', error)
+      return {
+        success: false,
+        error: error.response?.data?.detail || 'Erreur lors de l\'analyse',
+      }
+    }
+  }
+
+  getDocumentUrl(docId) {
+    return `${API_BASE_URL}/api/documents/${encodeURIComponent(docId)}`
+  }
 }
 
 export default new ApiService()

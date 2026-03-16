@@ -7,6 +7,7 @@ import {
   Chat,
   History,
   Description,
+  PictureAsPdf,
 } from '@mui/icons-material'
 
 const tabs = [
@@ -14,6 +15,7 @@ const tabs = [
   { path: '/symptom-input', label: 'Symptôme', icon: AddCircle, color: '#10b981' },
   { path: '/chat', label: 'Chat IA', icon: Chat, color: '#06b6d4' },
   { path: '/history', label: 'Historique', icon: History, color: '#f59e0b' },
+  { path: '/documents', label: 'Documents', icon: PictureAsPdf, color: '#ef4444' },
   { path: '/medical-profile', label: 'Fiche', icon: Description, color: '#0284c7' },
 ]
 
