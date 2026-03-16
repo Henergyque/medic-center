@@ -494,6 +494,119 @@ Sois factuel sans interpréter au-delà du texte. Rappelle que cela ne constitue
     }
 
 
+@app.post("/api/documents/{doc_id}/extract-symptoms")
+async def extract_symptoms_from_document(doc_id: str):
+    docs = _load_documents_index()
+    doc = next((d for d in docs if d["id"] == doc_id), None)
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document non trouvé.")
+
+    file_path = UPLOADS_DIR / doc["stored_name"]
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="Fichier introuvable.")
+
+    try:
+        extracted_text = _extract_pdf_text(file_path.read_bytes())
+    except Exception as e:
+        raise HTTPException(status_code=422, detail=f"Impossible de lire le PDF: {str(e)}")
+
+    if not extracted_text.strip():
+        raise HTTPException(
+            status_code=422,
+            detail="Aucun texte extractible dans ce PDF (document scanné ou image).",
+        )
+
+    truncated = extracted_text[:6000]
+
+    if DEMO_MODE:
+        return {
+            "symptoms": [
+                {
+                    "description": "Symptôme extrait (mode démo)",
+                    "intensity": 5,
+                    "body_part": "Autre",
+                    "duration": "1-3 jours",
+                    "notes": f"Extrait du document « {doc['original_name']} » (mode démo)",
+                    "timestamp": datetime.now().isoformat(),
+                }
+            ],
+            "document_name": doc["original_name"],
+        }
+
+    response = client.messages.create(
+        model=MODEL_NAME,
+        max_tokens=2000,
+        system="""Tu es un extracteur de données médicales. On te donne le texte d'un document médical.
+Extrais TOUS les symptômes mentionnés et retourne un tableau JSON strict.
+
+Chaque symptôme doit avoir ces champs :
+- "description": description courte du symptôme (string)
+- "intensity": intensité estimée de 1 à 10 (integer)
+- "body_part": zone du corps parmi: Tête, Gorge, Poitrine, Abdomen, Dos, Bras gauche, Bras droit, Jambe gauche, Jambe droite, Cou, Épaules, Mains, Pieds, Peau, Autre (string)
+- "duration": durée parmi: Moins d'1 heure, 1-6 heures, 6-24 heures, 1-3 jours, 3-7 jours, Plus d'1 semaine, Récurrent (string)
+- "notes": détails supplémentaires ou contexte (string)
+- "timestamp": date/heure si mentionnée au format ISO, sinon null (string ou null)
+
+Réponds UNIQUEMENT avec le tableau JSON, sans texte autour, sans markdown.
+Si aucun symptôme n'est trouvé, retourne [].
+Estime l'intensité en fonction de la gravité décrite.
+Si la date n'est pas précisée, utilise null pour timestamp.""",
+        messages=[{"role": "user", "content": f"Texte du document :\n\n{truncated}"}],
+    )
+
+    raw = response.content[0].text.strip()
+    # Nettoyer si le modèle a mis du markdown
+    if raw.startswith("```"):
+        raw = raw.split("\n", 1)[1] if "\n" in raw else raw[3:]
+        if raw.endswith("```"):
+            raw = raw[:-3]
+        raw = raw.strip()
+
+    try:
+        symptoms_list = json.loads(raw)
+    except json.JSONDecodeError:
+        raise HTTPException(
+            status_code=422,
+            detail="L'IA n'a pas pu extraire les symptômes dans un format exploitable.",
+        )
+
+    if not isinstance(symptoms_list, list):
+        symptoms_list = []
+
+    valid_body_parts = {
+        "Tête", "Gorge", "Poitrine", "Abdomen", "Dos",
+        "Bras gauche", "Bras droit", "Jambe gauche", "Jambe droite",
+        "Cou", "Épaules", "Mains", "Pieds", "Peau", "Autre",
+    }
+    valid_durations = {
+        "Moins d'1 heure", "1-6 heures", "6-24 heures",
+        "1-3 jours", "3-7 jours", "Plus d'1 semaine", "Récurrent",
+    }
+
+    cleaned = []
+    for s in symptoms_list:
+        if not isinstance(s, dict) or not s.get("description"):
+            continue
+        intensity = s.get("intensity", 5)
+        if not isinstance(intensity, int) or intensity < 1:
+            intensity = 5
+        if intensity > 10:
+            intensity = 10
+        cleaned.append({
+            "description": str(s["description"])[:200],
+            "intensity": intensity,
+            "body_part": s.get("body_part") if s.get("body_part") in valid_body_parts else "Autre",
+            "duration": s.get("duration") if s.get("duration") in valid_durations else "1-3 jours",
+            "notes": str(s.get("notes", f"Extrait du document « {doc['original_name']} »"))[:500],
+            "timestamp": s.get("timestamp"),
+        })
+
+    return {
+        "symptoms": cleaned,
+        "document_name": doc["original_name"],
+    }
+
+
 app.include_router(pdf_router)
 
 

@@ -43,7 +43,7 @@ import storageService from '../services/storageService'
 
 const HistoryPage = () => {
   const navigate = useNavigate()
-  const { symptoms, deleteSymptom, clearAllSymptoms, statistics, updateSymptom } = useSymptom()
+  const { symptoms, deleteSymptom, clearAllSymptoms, statistics, updateSymptom, addSymptom } = useSymptom()
   const [deleteDialog, setDeleteDialog] = useState(false)
   const [clearDialog, setClearDialog] = useState(false)
   const [editDialog, setEditDialog] = useState(false)
@@ -108,12 +108,38 @@ const HistoryPage = () => {
     }
     setUploading(true)
     setUploadError(null)
-    const result = await apiService.uploadDocument(file)
-    if (result.success) {
-      await loadDocuments()
-    } else {
-      setUploadError(result.error)
+
+    // 1. Upload the file
+    const uploadResult = await apiService.uploadDocument(file)
+    if (!uploadResult.success) {
+      setUploadError(uploadResult.error)
+      setUploading(false)
+      if (fileInputRef.current) fileInputRef.current.value = ''
+      return
     }
+
+    await loadDocuments()
+    const docId = uploadResult.data.document.id
+
+    // 2. Extract symptoms from the PDF and add them to history
+    const extractResult = await apiService.extractSymptomsFromDocument(docId)
+    if (extractResult.success && extractResult.data.symptoms.length > 0) {
+      for (const s of extractResult.data.symptoms) {
+        await addSymptom({
+          description: s.description,
+          intensity: s.intensity,
+          body_part: s.body_part,
+          duration: s.duration,
+          notes: s.notes || `Importé depuis « ${file.name} »`,
+          timestamp: s.timestamp || new Date().toISOString(),
+        })
+      }
+    } else if (extractResult.success && extractResult.data.symptoms.length === 0) {
+      setUploadError('Aucun symptôme trouvé dans ce document.')
+    } else {
+      setUploadError(extractResult.error || 'Erreur lors de l\'extraction des symptômes.')
+    }
+
     setUploading(false)
     if (fileInputRef.current) fileInputRef.current.value = ''
   }
@@ -423,7 +449,7 @@ const HistoryPage = () => {
               />
               <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: documents.length > 0 ? 2 : 0 }}>
                 <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
-                  PDF d'anciens symptômes
+                  Importer un PDF de symptômes
                 </Typography>
                 <Button
                   size="small"
@@ -431,7 +457,7 @@ const HistoryPage = () => {
                   onClick={() => fileInputRef.current?.click()}
                   disabled={uploading}
                 >
-                  Importer
+                  {uploading ? 'Extraction…' : 'Importer'}
                 </Button>
               </Box>
 

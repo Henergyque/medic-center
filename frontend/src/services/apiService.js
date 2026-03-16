@@ -207,6 +207,24 @@ class ApiService {
     }
   }
 
+  async extractSymptomsFromDocument(docId) {
+    try {
+      const response = await requestWithRetry(
+        () => apiClient.post(`/api/documents/${encodeURIComponent(docId)}/extract-symptoms`, null, {
+          timeout: 60000,
+        }),
+        1
+      )
+      return { success: true, data: response.data }
+    } catch (error) {
+      console.error('Erreur lors de l\'extraction des symptômes:', error)
+      return {
+        success: false,
+        error: error.response?.data?.detail || 'Erreur lors de l\'extraction des symptômes',
+      }
+    }
+  }
+
   getDocumentUrl(docId) {
     return `${API_BASE_URL}/api/documents/${encodeURIComponent(docId)}`
   }
